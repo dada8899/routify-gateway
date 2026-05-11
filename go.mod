@@ -35,6 +35,7 @@ require (
 	github.com/nicksnyder/go-i18n/v2 v2.6.1
 	github.com/pkg/errors v0.9.1
 	github.com/pquerna/otp v1.5.0
+	github.com/redis/go-redis/v9 v9.19.0
 	github.com/samber/hot v0.11.0
 	github.com/samber/lo v1.52.0
 	github.com/shirou/gopsutil v3.21.11+incompatible
@@ -59,6 +60,8 @@ require (
 	gorm.io/driver/postgres v1.5.2
 	gorm.io/gorm v1.25.2
 )
+
+require go.uber.org/atomic v1.11.0 // indirect
 
 require (
 	github.com/DmitriyVTitov/size v1.5.0 // indirect

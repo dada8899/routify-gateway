@@ -1,0 +1,149 @@
+# Routify 风控规则配置
+# 加载到 middleware/risk_control.go
+# 修改后需重启 gateway
+
+version: "1.0.0"
+updated_at: "2026-05-10"
+
+# ============================================================
+# 全局开关
+# ============================================================
+enabled: true
+mode: enforce        # enforce | observe（observe 只记录不阻断）
+log_all: true        # 记录所有风控判定到 ClickHouse
+
+# ============================================================
+# IP 维度
+# ============================================================
+ip:
+  # 单 IP 关联多账号
+  multi_account_threshold: 5      # 单 IP 关联 ≥5 账号 → 标记
+  multi_account_window: 24h
+  multi_account_action: flag       # flag | challenge | block
+
+  # 高频请求
+  rps_burst_threshold: 50          # 单 IP 1s 内 ≥50 请求
+  rps_burst_action: throttle
+
+  # 黑名单
+  blocklist_file: /data/routify/ip-blocklist.txt
+  allowlist_file: /data/routify/ip-allowlist.txt
+
+  # 跨地域使用（同账号 1h 内出现在 2 个国家）
+  geo_anomaly_window: 1h
+  geo_anomaly_action: challenge_2fa
+
+# ============================================================
+# 账号维度
+# ============================================================
+account:
+  # 异常 token 消耗
+  token_spike_threshold_ratio: 10   # 当日消耗 ≥ 7 日均值 × 10
+  token_spike_action: pause_and_alert
+
+  # 余额低
+  balance_low_threshold_rmb: 5
+  balance_low_action: notify_user
+
+  # 余额负
+  balance_negative_action: suspend
+
+  # 新账号高频充值（疑似洗钱 / 信用卡盗刷）
+  new_account_recharge_window: 24h
+  new_account_recharge_threshold_rmb: 5000
+  new_account_recharge_action: manual_review
+
+  # 多账号注册（同设备指纹）
+  device_fingerprint_threshold: 3
+  device_fingerprint_window: 7d
+  device_fingerprint_action: flag
+
+# ============================================================
+# 内容维度（合规）
+# ============================================================
+content:
+  # 敏感词库
+  enabled: true
+  wordlist_file: /data/routify/content-wordlist.txt
+  wordlist_update_cron: "0 2 * * MON"   # 每周一 02:00 更新
+  match_action: redact_and_alert         # redact_and_alert | block | log_only
+
+  # 大模型审核（用 GPT-3.5 / DeepSeek 廉价模型审核 prompt）
+  llm_moderation_enabled: false   # 默认关闭（成本考虑），可单独开启
+  llm_moderation_model: deepseek-v3.2
+  llm_moderation_categories:
+    - violence
+    - sexual
+    - political_sensitive
+    - hate_speech
+    - self_harm
+
+  # 审核失败时
+  llm_moderation_on_error: pass    # pass | block | warn
+
+# ============================================================
+# 行为维度
+# ============================================================
+behavior:
+  # 重复 prompt（疑似自动化爬取）
+  duplicate_prompt_window: 1h
+  duplicate_prompt_threshold: 100
+  duplicate_prompt_action: throttle
+
+  # 异常长 prompt（疑似填充攻击）
+  prompt_length_max: 1000000  # 100w 字符
+  prompt_length_action: block
+
+  # 用户主动触发的高消耗（每分钟 > $1）
+  cost_per_minute_threshold_usd: 1.0
+  cost_per_minute_action: notify_user
+
+# ============================================================
+# 渠道维度（保护上游 API key）
+# ============================================================
+channel:
+  # 失败率高
+  failure_rate_threshold: 0.20  # 10min 内失败率 > 20%
+  failure_rate_window: 10m
+  failure_rate_action: temporary_disable
+  failure_rate_disable_duration: 5m
+
+  # 上游账号余额
+  balance_warn_rmb: 100
+  balance_critical_rmb: 20
+  balance_critical_action: alert_admin
+  balance_critical_remove_from_pool: true
+
+  # 上游 rate limit
+  rate_limit_429_threshold: 5    # 5min 内被上游 429 ≥5 次
+  rate_limit_429_window: 5m
+  rate_limit_429_action: temporary_disable
+
+# ============================================================
+# 通知配置
+# ============================================================
+notifications:
+  channels:
+    - feishu
+    - discord
+  thresholds:
+    info: never            # 不通知
+    warn: aggregate_5m     # 5min 聚合
+    error: immediate       # 立即通知
+    critical: immediate
+
+# ============================================================
+# 审计日志
+# ============================================================
+audit:
+  enabled: true
+  table: routify_logs.risk_events
+  retention_days: 180
+  fields:
+    - timestamp
+    - rule_id
+    - subject_type      # ip | account | channel
+    - subject_id
+    - action_taken
+    - severity
+    - context_json

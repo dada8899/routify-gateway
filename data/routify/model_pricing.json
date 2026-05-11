@@ -1,0 +1,182 @@
+{
+  "$schema": "./model_pricing.schema.json",
+  "version": "1.0.0",
+  "updated_at": "2026-05-10",
+  "currency": "USD_per_million_tokens",
+  "_comment": "完整定价配置 — 上游官方价 / 我方采购价 / 三档分组售价。倍率以 OpenAI 早期 GPT-3.5 为 1.0 基准（已弃用，仅作历史锚点）。实际计费 = quoted_price × group_rate × completion_rate（输出 vs 输入）",
+
+  "groups": {
+    "free": { "rate": 0.0, "_desc": "免费试用，仅 DeepSeek/Kimi 廉价模型，每日 10w token 上限" },
+    "domestic_pro": { "rate": 1.10, "_desc": "国内付费用户，加价 10%" },
+    "domestic_vip": { "rate": 1.05, "_desc": "国内 VIP，加价 5%" },
+    "overseas_pro": { "rate": 1.80, "_desc": "海外付费用户，国产模型加价 80%" },
+    "overseas_vip": { "rate": 1.50, "_desc": "海外 VIP，加价 50%" },
+    "kol": { "rate": 1.00, "_desc": "KOL/合作伙伴，按成本价" },
+    "internal": { "rate": 0.0, "_desc": "团队内部测试" }
+  },
+
+  "models": {
+    "deepseek-v3.2": {
+      "vendor": "deepseek",
+      "official_price_input": 0.14,
+      "official_price_output": 0.28,
+      "our_cost_input": 0.10,
+      "our_cost_output": 0.20,
+      "context_window": 65536,
+      "completion_rate": 2.0,
+      "tags": ["chat", "code", "fast"],
+      "regions": ["domestic", "overseas"]
+    },
+    "deepseek-r1": {
+      "vendor": "deepseek",
+      "official_price_input": 0.55,
+      "official_price_output": 2.19,
+      "our_cost_input": 0.40,
+      "our_cost_output": 1.80,
+      "context_window": 65536,
+      "completion_rate": 4.0,
+      "tags": ["reasoning", "math"],
+      "regions": ["domestic", "overseas"]
+    },
+    "kimi-k2.5": {
+      "vendor": "moonshot",
+      "official_price_input": 0.60,
+      "official_price_output": 2.50,
+      "our_cost_input": 0.45,
+      "our_cost_output": 2.00,
+      "context_window": 131072,
+      "completion_rate": 4.2,
+      "tags": ["chat", "long_context", "tool_use"],
+      "regions": ["domestic", "overseas"]
+    },
+    "glm-4.6": {
+      "vendor": "zhipu",
+      "official_price_input": 0.50,
+      "official_price_output": 1.50,
+      "our_cost_input": 0.35,
+      "our_cost_output": 1.20,
+      "context_window": 131072,
+      "completion_rate": 3.0,
+      "tags": ["chat", "tool_use"],
+      "regions": ["domestic", "overseas"]
+    },
+    "qwen3-max": {
+      "vendor": "alibaba",
+      "official_price_input": 0.60,
+      "official_price_output": 2.40,
+      "our_cost_input": 0.45,
+      "our_cost_output": 2.00,
+      "context_window": 262144,
+      "completion_rate": 4.0,
+      "tags": ["chat", "long_context"],
+      "regions": ["domestic", "overseas"]
+    },
+    "qwen3-coder": {
+      "vendor": "alibaba",
+      "official_price_input": 0.30,
+      "official_price_output": 1.50,
+      "our_cost_input": 0.20,
+      "our_cost_output": 1.20,
+      "context_window": 131072,
+      "completion_rate": 5.0,
+      "tags": ["code"],
+      "regions": ["domestic", "overseas"]
+    },
+    "doubao-1.6-pro": {
+      "vendor": "bytedance",
+      "official_price_input": 0.40,
+      "official_price_output": 1.20,
+      "our_cost_input": 0.30,
+      "our_cost_output": 1.00,
+      "context_window": 65536,
+      "completion_rate": 3.0,
+      "tags": ["chat", "multimodal"],
+      "regions": ["domestic"]
+    },
+    "minimax-m2.5": {
+      "vendor": "minimax",
+      "official_price_input": 0.30,
+      "official_price_output": 1.20,
+      "our_cost_input": 0.22,
+      "our_cost_output": 1.00,
+      "context_window": 200000,
+      "completion_rate": 4.0,
+      "tags": ["chat", "fast"],
+      "regions": ["domestic", "overseas"]
+    },
+    "claude-opus-4-7": {
+      "vendor": "anthropic",
+      "official_price_input": 15.00,
+      "official_price_output": 75.00,
+      "our_cost_input": 15.00,
+      "our_cost_output": 75.00,
+      "context_window": 200000,
+      "completion_rate": 5.0,
+      "tags": ["chat", "code", "premium"],
+      "regions": ["overseas"],
+      "_note": "海外原价透传，主要为已有 Claude 用户提供合规通道"
+    },
+    "claude-sonnet-4-6": {
+      "vendor": "anthropic",
+      "official_price_input": 3.00,
+      "official_price_output": 15.00,
+      "our_cost_input": 3.00,
+      "our_cost_output": 15.00,
+      "context_window": 200000,
+      "completion_rate": 5.0,
+      "tags": ["chat", "code"],
+      "regions": ["overseas"]
+    },
+    "gpt-4o": {
+      "vendor": "openai",
+      "official_price_input": 2.50,
+      "official_price_output": 10.00,
+      "our_cost_input": 2.50,
+      "our_cost_output": 10.00,
+      "context_window": 128000,
+      "completion_rate": 4.0,
+      "tags": ["chat", "multimodal"],
+      "regions": ["overseas"]
+    },
+    "o1": {
+      "vendor": "openai",
+      "official_price_input": 15.00,
+      "official_price_output": 60.00,
+      "our_cost_input": 15.00,
+      "our_cost_output": 60.00,
+      "context_window": 200000,
+      "completion_rate": 4.0,
+      "tags": ["reasoning"],
+      "regions": ["overseas"]
+    },
+    "gemini-3-pro": {
+      "vendor": "google",
+      "official_price_input": 1.25,
+      "official_price_output": 5.00,
+      "our_cost_input": 1.25,
+      "our_cost_output": 5.00,
+      "context_window": 2000000,
+      "completion_rate": 4.0,
+      "tags": ["chat", "long_context", "multimodal"],
+      "regions": ["overseas"]
+    },
+    "kling-1.6": {
+      "vendor": "kling",
+      "official_price_input": 0,
+      "official_price_output": 0,
+      "billing_unit": "per_second_of_video",
+      "official_price_per_unit": 0.50,
+      "our_cost_per_unit": 0.35,
+      "tags": ["video"],
+      "regions": ["domestic", "overseas"]
+    }
+  },
+
+  "fallback_chains": {
+    "_comment": "主渠道失败时的备选链。按成本/质量平衡。",
+    "deepseek-v3.2": ["deepseek-v3.2-backup", "kimi-k2.5", "glm-4.6"],
+    "kimi-k2.5": ["kimi-k2.5-backup", "deepseek-v3.2", "glm-4.6"],
+    "claude-opus-4-7": ["claude-opus-4-7-aws", "claude-sonnet-4-6"],
+    "gpt-4o": ["gpt-4o-azure", "claude-sonnet-4-6"]
+  }
+}

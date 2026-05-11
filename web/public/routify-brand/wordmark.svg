@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 64" width="240" height="64">
+  <defs>
+    <linearGradient id="rwm" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#18181b"/>
+      <stop offset="100%" stop-color="#3f3f46"/>
+    </linearGradient>
+  </defs>
+  <rect x="0" y="0" width="56" height="56" rx="14" fill="url(#rwm)"/>
+  <text x="28" y="40"
+        font-family="Newsreader, Georgia, serif"
+        font-size="32"
+        font-weight="500"
+        font-style="italic"
+        text-anchor="middle"
+        fill="#fafafa">R</text>
+  <text x="72" y="40"
+        font-family="Inter, -apple-system, sans-serif"
+        font-size="28"
+        font-weight="600"
+        fill="#18181b"
+        letter-spacing="-0.5">Routify</text>
+</svg>

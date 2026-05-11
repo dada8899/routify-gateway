@@ -1,0 +1,164 @@
+# Routify 渠道配置（多上游）
+# 用于初始化 channel 表，启动时由 routify/patches/bootstrap-channels.go 读取
+
+version: "1.0.0"
+
+defaults:
+  health_check_interval: 60s
+  health_check_endpoint: /v1/models
+  failure_threshold: 5
+  cooldown_after_failure: 5m
+  timeout: 30s
+
+channels:
+  # ============================================================
+  # 国产模型 — 官方直采
+  # ============================================================
+  - name: deepseek-official
+    vendor: deepseek
+    base_url: https://api.deepseek.com
+    api_key_env: DEEPSEEK_API_KEY
+    models:
+      - deepseek-v3.2
+      - deepseek-r1
+    priority: 100
+    weight: 100
+    region: domestic
+    quality_tier: official
+
+  - name: kimi-official
+    vendor: moonshot
+    base_url: https://api.moonshot.cn
+    api_key_env: KIMI_API_KEY
+    models:
+      - kimi-k2.5
+    priority: 100
+    weight: 100
+    region: domestic
+    quality_tier: official
+
+  - name: zhipu-official
+    vendor: zhipu
+    base_url: https://open.bigmodel.cn/api/paas/v4
+    api_key_env: ZHIPU_API_KEY
+    models:
+      - glm-4.6
+    priority: 100
+    weight: 100
+    region: domestic
+    quality_tier: official
+
+  - name: qwen-official
+    vendor: alibaba
+    base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+    api_key_env: QWEN_API_KEY
+    models:
+      - qwen3-max
+      - qwen3-coder
+    priority: 100
+    weight: 100
+    region: domestic
+    quality_tier: official
+
+  - name: doubao-official
+    vendor: bytedance
+    base_url: https://ark.cn-beijing.volces.com/api/v3
+    api_key_env: DOUBAO_API_KEY
+    models:
+      - doubao-1.6-pro
+    priority: 100
+    weight: 100
+    region: domestic
+    quality_tier: official
+
+  - name: minimax-official
+    vendor: minimax
+    base_url: https://api.minimax.chat/v1
+    api_key_env: MINIMAX_API_KEY
+    models:
+      - minimax-m2.5
+    priority: 100
+    weight: 100
+    region: domestic
+    quality_tier: official
+
+  # ============================================================
+  # 海外模型 — 官方/Azure 直采
+  # ============================================================
+  - name: openai-official
+    vendor: openai
+    base_url: https://api.openai.com/v1
+    api_key_env: OPENAI_API_KEY
+    models:
+      - gpt-4o
+      - o1
+    priority: 100
+    weight: 100
+    region: overseas
+    quality_tier: official
+
+  - name: anthropic-official
+    vendor: anthropic
+    base_url: https://api.anthropic.com/v1
+    api_key_env: ANTHROPIC_API_KEY
+    models:
+      - claude-opus-4-7
+      - claude-sonnet-4-6
+    priority: 100
+    weight: 100
+    region: overseas
+    quality_tier: official
+
+  - name: gemini-official
+    vendor: google
+    base_url: https://generativelanguage.googleapis.com/v1beta
+    api_key_env: GEMINI_API_KEY
+    models:
+      - gemini-3-pro
+    priority: 100
+    weight: 100
+    region: overseas
+    quality_tier: official
+
+  # ============================================================
+  # 视频生成
+  # ============================================================
+  - name: kling-official
+    vendor: kling
+    base_url: https://api.klingai.com/v1
+    api_key_env: KLING_API_KEY
+    models:
+      - kling-1.6
+    priority: 100
+    weight: 100
+    region: domestic
+    quality_tier: official
+
+  # ============================================================
+  # 备用渠道（一级代理 / 自建集群占位）
+  # 用户填写实际 base_url 后启用
+  # ============================================================
+  - name: deepseek-backup-1
+    vendor: deepseek
+    base_url: ""          # 待填
+    api_key_env: DEEPSEEK_BACKUP_1_API_KEY
+    models:
+      - deepseek-v3.2
+    priority: 50
+    weight: 50
+    region: domestic
+    quality_tier: proxy
+    enabled: false        # 待激活
+
+  - name: claude-aws-bedrock
+    vendor: anthropic
+    base_url: ""          # bedrock-runtime endpoint
+    api_key_env: AWS_BEDROCK_API_KEY
+    models:
+      - claude-opus-4-7
+      - claude-sonnet-4-6
+    priority: 60
+    weight: 30
+    region: overseas
+    quality_tier: official
+    enabled: false

@@ -1,0 +1,149 @@
+# Routify 限流配置
+# 三级限流：全局 → 用户 → 模型
+# 加载到 middleware/rate_limit.go
+
+version: "1.0.0"
+updated_at: "2026-05-10"
+
+# ============================================================
+# Layer 1: 全局限流（保护服务器）
+# ============================================================
+global:
+  enabled: true
+  qps: 100000        # 单实例 10w QPS（New-API 实测可达）
+  burst: 200000
+  algorithm: token_bucket
+
+# ============================================================
+# Layer 2: 用户限流（按分组）
+# ============================================================
+user_groups:
+  free:
+    rpm: 60
+    rph: 600
+    rpd: 5000
+    tokens_per_day: 100000   # 10w token/day
+    concurrent_requests: 2
+    cooldown_after_429: 60s
+
+  domestic_pro:
+    rpm: 300
+    rph: 10000
+    rpd: 100000
+    tokens_per_day: 0        # 0 = 不限
+    concurrent_requests: 8
+    cooldown_after_429: 30s
+
+  domestic_vip:
+    rpm: 1500
+    rph: 50000
+    rpd: 1000000
+    tokens_per_day: 0
+    concurrent_requests: 32
+    cooldown_after_429: 10s
+
+  overseas_pro:
+    rpm: 300
+    rph: 10000
+    rpd: 100000
+    tokens_per_day: 0
+    concurrent_requests: 8
+    cooldown_after_429: 30s
+
+  overseas_vip:
+    rpm: 3000
+    rph: 100000
+    rpd: 0                   # 不限
+    tokens_per_day: 0
+    concurrent_requests: 64
+    cooldown_after_429: 10s
+
+  kol:
+    rpm: 600
+    rph: 20000
+    rpd: 0
+    tokens_per_day: 0
+    concurrent_requests: 16
+
+  enterprise:
+    rpm: 0                   # 0 = 不限
+    rph: 0
+    rpd: 0
+    tokens_per_day: 0
+    concurrent_requests: 256
+
+# ============================================================
+# Layer 3: 模型限流（保护上游 API）
+# ============================================================
+model_limits:
+  # 廉价模型 — 放开
+  "deepseek-v3.2":
+    rpm: 1000
+    concurrent: 50
+  "kimi-k2.5":
+    rpm: 800
+    concurrent: 30
+  "glm-4.6":
+    rpm: 800
+    concurrent: 30
+  "doubao-1.6-pro":
+    rpm: 1000
+    concurrent: 50
+
+  # 中价位模型 — 适度
+  "qwen3-max":
+    rpm: 400
+    concurrent: 15
+  "deepseek-r1":
+    rpm: 200
+    concurrent: 10
+
+  # 高价模型 — 保守（保护账户余额）
+  "claude-opus-4-7":
+    rpm: 50
+    concurrent: 5
+  "claude-sonnet-4-6":
+    rpm: 200
+    concurrent: 15
+  "gpt-4o":
+    rpm: 200
+    concurrent: 15
+  "o1":
+    rpm: 50
+    concurrent: 5
+
+  # 视频生成（计费按秒，非常贵）
+  "kling-1.6":
+    rpm: 30
+    concurrent: 3
+    daily_cap: 1000           # 每日全平台最多 1000 次
+
+# ============================================================
+# 特殊路径（控制台 / 充值 / 注册）
+# ============================================================
+endpoints:
+  /v1/chat/completions:
+    use: model_limits
+  /v1/embeddings:
+    rpm_per_user: 1000
+    concurrent: 100
+  /api/auth/login:
+    rpm_per_ip: 10            # 防爆破
+    cooldown_after_failure: 5m
+  /api/auth/register:
+    rpm_per_ip: 3             # 防批量注册
+    cooldown_after_failure: 1h
+  /api/payment/recharge:
+    rpm_per_user: 5
+  /api/payment/webhook:
+    rpm_per_ip: 100           # 支付平台回调
+
+# ============================================================
+# 实现
+# ============================================================
+implementation:
+  backend: redis
+  redis_key_prefix: "routify:rl:"
+  algorithm: sliding_window     # token_bucket | sliding_window | fixed_window
+  fail_open: true               # Redis 不可用时不限流（避免误伤）
+  fail_open_alert: true         # fail open 时告警

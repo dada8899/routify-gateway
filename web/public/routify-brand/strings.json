@@ -1,0 +1,46 @@
+{
+  "_comment": "品牌文案替换表 — apply-overlay.sh 会用 sed 把上游字符串替换为 Routify",
+  "version": "1.0.0",
+
+  "brand": {
+    "name_zh": "Routify · 轻舟",
+    "name_en": "Routify",
+    "tagline_zh": "国产 AI 模型聚合网关",
+    "tagline_en": "Open Gateway for Chinese AI Models",
+    "site_url": "https://routify.bytedance.city",
+    "support_email": "support@routify.bytedance.city",
+    "company": "Routify Inc."
+  },
+
+  "replacements": [
+    {"from": "Routify", "to": "Routify"},
+    {"from": "routify", "to": "routify"},
+    {"from": "Routify", "to": "Routify"},
+    {"from": "Routify", "to": "Routify"},
+    {"from": "routify", "to": "routify"},
+    {"from": "Routify", "to": "Routify"},
+    {"from": "Routify", "to": "Routify"},
+    {"from": "routify.bytedance.city", "to": "routify.bytedance.city"}
+  ],
+
+  "footer": {
+    "zh": "Powered by <a href=\"https://github.com/Routify/routify\">New-API</a>（MIT）· © Routify · 轻舟 2026",
+    "en": "Powered by <a href=\"https://github.com/Routify/routify\">New-API</a> (MIT) · © Routify 2026"
+  },
+
+  "email_templates": {
+    "welcome": {
+      "subject_zh": "欢迎使用 Routify · 轻舟",
+      "subject_en": "Welcome to Routify",
+      "from": "Routify <noreply@routify.bytedance.city>"
+    },
+    "password_reset": {
+      "subject_zh": "Routify · 重置密码",
+      "subject_en": "Routify · Reset your password"
+    },
+    "balance_low": {
+      "subject_zh": "Routify · 余额提醒",
+      "subject_en": "Routify · Balance running low"
+    }
+  }
+}
