@@ -9,6 +9,7 @@ package routify
 
 import (
 	"errors"
+	"sync"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -16,6 +17,46 @@ import (
 
 	"gorm.io/gorm"
 )
+
+// In-process per-IP rate limiter for audit log writes. Defends the table
+// against an attacker hammering 401 calls to fill up disk / lock the table.
+// Allows 30 writes/min per IP; bursts beyond that are silently dropped
+// (still logged via SysError once per IP per minute).
+var (
+	auditLimiterMu       sync.Mutex
+	auditLimiterPerIP    = map[string]*ipBucket{}
+	auditLimiterMaxPerIP = 30
+	auditLimiterWindow   = time.Minute
+)
+
+type ipBucket struct {
+	count     int
+	windowEnd time.Time
+	warned    bool
+}
+
+func auditAllowed(ip string) bool {
+	if ip == "" {
+		ip = "unknown"
+	}
+	auditLimiterMu.Lock()
+	defer auditLimiterMu.Unlock()
+	now := time.Now()
+	b := auditLimiterPerIP[ip]
+	if b == nil || now.After(b.windowEnd) {
+		b = &ipBucket{count: 0, windowEnd: now.Add(auditLimiterWindow)}
+		auditLimiterPerIP[ip] = b
+	}
+	if b.count >= auditLimiterMaxPerIP {
+		if !b.warned {
+			common.SysError("[routify] audit rate-limited ip=" + ip)
+			b.warned = true
+		}
+		return false
+	}
+	b.count++
+	return true
+}
 
 // RoutifyOAuthAuditLog is one finalize attempt.
 type RoutifyOAuthAuditLog struct {
@@ -56,6 +97,12 @@ func WriteAuditLog(row *RoutifyOAuthAuditLog) {
 	}
 	if model.DB == nil {
 		common.SysError("[routify] audit: DB nil; dropping log row")
+		return
+	}
+	// Per-IP rate limit. Attackers hitting auth_failed in a loop should not
+	// be able to bloat this table. Successful logins (rare per IP) always
+	// pass — they consume the bucket but don't usually exceed 30/min.
+	if !auditAllowed(row.IPAddress) {
 		return
 	}
 	if row.CreatedAt == 0 {

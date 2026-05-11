@@ -124,6 +124,12 @@ func OAuthFinalizeHandler(c *gin.Context) {
 			c.JSON(http.StatusForbidden, gin.H{"error": "account disabled"})
 			return
 		}
+		if errors.Is(err, errPasswordAccountLoginRequired) {
+			auditRow.Outcome = AuditOutcomeBadRequest
+			auditRow.ErrorMessage = "password account exists, link via dashboard"
+			c.JSON(http.StatusConflict, gin.H{"error": "password_account_login_required"})
+			return
+		}
 		auditRow.Outcome = AuditOutcomeInternalError
 		auditRow.ErrorMessage = err.Error()
 		// Log full error server-side; return generic message to caller to avoid
@@ -207,17 +213,44 @@ func tryFindOrCreate(db *gorm.DB, req *OAuthFinalizeRequest) (*model.User, error
 			return nil
 		}
 
-		// Path 2: existing user with this email → link
+		// Path 2: existing user with this email.
+		//
+		// Account-merge defense: refuse to silently link a fresh OAuth identity
+		// to a pre-existing password account. An attacker who can convince a
+		// provider to verify victim@example.com (e.g. via GitHub primary-email
+		// flow) would otherwise inherit the victim's account on first OAuth.
+		//
+		// Policy:
+		//   - email-hit + user already has SOME oauth account in this provider
+		//     bucket (we've seen them before)             → safe to auto-link
+		//   - email-hit + user is OAuth-only (no password) → safe to auto-link
+		//   - email-hit + user has a password set         → refuse + redirect
+		//     them through password login first; they can then bind OAuth from
+		//     the dashboard settings page.
+		//
+		// "Has a password" is a strong signal that the email-claim must be
+		// proven by knowing the secret, not just by getting an OAuth provider
+		// to attest to the email.
 		if req.Email != "" {
 			u, err := getUserByEmailTx(tx, req.Email)
 			if err != nil {
 				return err
 			}
 			if u != nil && u.Id != 0 {
-				// Block linkage to disabled accounts BEFORE writing the linkage row,
-				// so attackers cannot probe "is this email registered (banned)?"
 				if u.Status == common.UserStatusDisabled {
 					return errAccountDisabled
+				}
+				// Check whether this user already has any OAuth identity linked
+				// in our side table — if so, they've been through OAuth before,
+				// linking another provider for the same email is a normal flow.
+				var existingOAuth int64
+				if err := tx.Model(&RoutifyOAuthAccount{}).
+					Where("user_id = ?", u.Id).Count(&existingOAuth).Error; err != nil {
+					return err
+				}
+				hasPassword := strings.TrimSpace(u.Password) != ""
+				if hasPassword && existingOAuth == 0 {
+					return errPasswordAccountLoginRequired
 				}
 				if err := LinkOAuthAccount(tx, u.Id, req.Provider, req.ProviderUserId, req.Email, req.Name, req.Avatar); err != nil {
 					return err
@@ -274,6 +307,10 @@ func tryFindOrCreate(db *gorm.DB, req *OAuthFinalizeRequest) (*model.User, error
 // errAccountDisabled is returned when a request would otherwise grant a
 // session to an admin-disabled account.
 var errAccountDisabled = errors.New("account disabled")
+
+// errPasswordAccountLoginRequired is returned when path-2 would silently
+// merge a fresh OAuth identity into a pre-existing password account.
+var errPasswordAccountLoginRequired = errors.New("password account exists; sign in with password first")
 
 // isLockErr identifies transient busy/lock errors worth retrying. SQLite
 // reports SQLITE_BUSY on contended writes; production PG/MySQL rarely raise
@@ -401,11 +438,12 @@ func ensureAccessToken(user *model.User) (string, error) {
 	return "", errors.New("ensureAccessToken: token contention exceeded retry budget")
 }
 
-// checkInternalSecret enforces the X-Routify-Internal shared secret unless
-// dev mode is on. In production the env var must be set; missing env var
-// triggers fail-closed behavior to prevent accidental "auth-less" deploys.
+// checkInternalSecret enforces the X-Routify-Internal shared secret. Dev
+// mode bypass is honored ONLY when GIN_MODE != "release" — this prevents an
+// accidentally-leaked ROUTIFY_DEV_MODE=1 in a production image from
+// disabling the secret check entirely.
 func checkInternalSecret(c *gin.Context) bool {
-	if os.Getenv(devModeEnv) == "1" {
+	if os.Getenv(devModeEnv) == "1" && os.Getenv("GIN_MODE") != "release" {
 		return true
 	}
 	expected := os.Getenv(internalSecretEnv)

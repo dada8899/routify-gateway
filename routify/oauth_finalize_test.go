@@ -3,6 +3,7 @@ package routify
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -196,12 +197,14 @@ func TestFindOrCreate_ExistingOAuthAccount(t *testing.T) {
 	}
 }
 
-func TestFindOrCreate_LinkExistingEmail(t *testing.T) {
+func TestFindOrCreate_LinkExistingEmail_OAuthOnlyUserAllowed(t *testing.T) {
 	setupTestDB(t)
-	// Pre-create a user via password registration path.
+	// Pre-create an OAuth-only user (no password). Path-2 should auto-link a
+	// new provider for the same email — this is the legitimate
+	// "user adds a second provider with the same email" flow.
 	existing := &model.User{
 		Username:    "existinguser",
-		Password:    "fake-hash-not-used",
+		Password:    "", // OAuth-only — no password
 		DisplayName: "Existing",
 		Email:       "shared@example.com",
 		Role:        common.RoleCommonUser,
@@ -211,7 +214,6 @@ func TestFindOrCreate_LinkExistingEmail(t *testing.T) {
 		t.Fatalf("seed user: %v", err)
 	}
 
-	// Now an OAuth callback for the same email arrives.
 	req := &OAuthFinalizeRequest{
 		Provider:       "google",
 		ProviderUserId: "google-link-test",
@@ -225,19 +227,51 @@ func TestFindOrCreate_LinkExistingEmail(t *testing.T) {
 	if u.Id != existing.Id {
 		t.Errorf("expected to link to existing user %d, got %d", existing.Id, u.Id)
 	}
-	// Verify only 1 user (no duplicate created).
 	var n int64
 	model.DB.Model(&model.User{}).Count(&n)
 	if n != 1 {
 		t.Errorf("expected 1 user, got %d (duplicate-create regression)", n)
 	}
-	// Linkage exists.
 	acc, hit, err := FindOAuthAccount(model.DB, "google", "google-link-test")
 	if err != nil || !hit {
 		t.Fatalf("no linkage row (hit=%v err=%v)", hit, err)
 	}
 	if acc.UserId != existing.Id {
 		t.Errorf("linkage user_id wrong: want %d got %d", existing.Id, acc.UserId)
+	}
+}
+
+func TestFindOrCreate_PasswordUserRefusesAutoLink(t *testing.T) {
+	setupTestDB(t)
+	// Account-merge defense: a user with a password and no prior OAuth must
+	// NOT be silently linked. Attacker scenario: someone gets a provider to
+	// verify victim@example.com and tries to take over a password account.
+	existing := &model.User{
+		Username:    "passworduser",
+		Password:    "fake-hash-not-used", // has a password
+		DisplayName: "Password User",
+		Email:       "victim@example.com",
+		Role:        common.RoleCommonUser,
+		Status:      common.UserStatusEnabled,
+	}
+	if err := existing.Insert(0); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	req := &OAuthFinalizeRequest{
+		Provider:       "google",
+		ProviderUserId: "attacker-sub-1",
+		Email:          "victim@example.com",
+		Name:           "Attacker",
+	}
+	_, err := findOrCreateOAuthUser(model.DB, req)
+	if !errors.Is(err, errPasswordAccountLoginRequired) {
+		t.Errorf("expected errPasswordAccountLoginRequired, got %v", err)
+	}
+	// Linkage row must NOT exist.
+	_, hit, _ := FindOAuthAccount(model.DB, "google", "attacker-sub-1")
+	if hit {
+		t.Error("attacker's OAuth identity should not be linked")
 	}
 }
 
