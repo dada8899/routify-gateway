@@ -22,6 +22,10 @@ import (
 	"fmt"
 	"os"
 	"sync"
+
+	"github.com/QuantumNous/new-api/common"
+
+	"github.com/gin-gonic/gin"
 )
 
 // SelectorOverride, when non-nil, replaces the default channel selection
@@ -79,9 +83,27 @@ func Init() {
 		// Quota override stays nil until pricing/Reserver are wired (Stage C).
 		// Until then upstream billing applies.
 
+		// Migrate routify-owned side tables (oauth_accounts, etc).
+		if err := migrateOAuthAccountTable(); err != nil {
+			common.SysError("[routify] failed to migrate routify_oauth_accounts: " + err.Error())
+		}
+
 		enabled = true
 		fmt.Println("[routify] overlay active (selector ready, quota=upstream)")
 	})
+}
+
+// RegisterRoutes mounts routify-owned HTTP endpoints onto the upstream
+// `/api` router group. Called from router/api-router.go with a single line
+// to keep the upstream patch surface minimal.
+func RegisterRoutes(apiRouter *gin.RouterGroup) {
+	if apiRouter == nil {
+		return
+	}
+	auth := apiRouter.Group("/auth")
+	{
+		auth.POST("/oauth-finalize", OAuthFinalizeHandler)
+	}
 }
 
 // IsEnabled reports whether the overlay is wired in. Useful for smoke tests

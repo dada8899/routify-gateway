@@ -7,6 +7,8 @@ import (
 	// Import oauth package to register providers via init()
 	_ "github.com/QuantumNous/new-api/oauth"
 
+	"github.com/QuantumNous/new-api/routify"
+
 	"github.com/gin-contrib/gzip"
 	"github.com/gin-gonic/gin"
 )
@@ -52,6 +54,9 @@ func SetApiRouter(router *gin.Engine) {
 		// Standard OAuth providers (GitHub, Discord, OIDC, LinuxDO) - unified route
 		apiRouter.GET("/oauth/:provider", middleware.CriticalRateLimit(), controller.HandleOAuth)
 		apiRouter.GET("/ratio_config", middleware.CriticalRateLimit(), controller.GetRatioConfig)
+
+		// Routify overlay endpoints (oauth-finalize, etc).
+		routify.RegisterRoutes(apiRouter)
 
 		apiRouter.POST("/stripe/webhook", controller.StripeWebhook)
 		apiRouter.POST("/creem/webhook", controller.CreemWebhook)
