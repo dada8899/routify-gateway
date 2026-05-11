@@ -107,6 +107,11 @@ func RegisterRoutes(apiRouter *gin.RouterGroup) {
 	{
 		auth.POST("/oauth-finalize", OAuthFinalizeHandler)
 	}
+	status := apiRouter.Group("/status")
+	{
+		// Public, no auth — sanitized output by design.
+		status.GET("/upstream", StatusUpstreamHandler)
+	}
 }
 
 // IsEnabled reports whether the overlay is wired in. Useful for smoke tests
