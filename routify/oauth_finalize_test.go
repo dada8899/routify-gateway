@@ -35,7 +35,7 @@ func setupTestDB(t *testing.T) *gorm.DB {
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
 	}
-	if err := db.AutoMigrate(&model.User{}, &model.Log{}, &RoutifyOAuthAccount{}); err != nil {
+	if err := db.AutoMigrate(&model.User{}, &model.Log{}, &RoutifyOAuthAccount{}, &RoutifyOAuthAuditLog{}); err != nil {
 		t.Fatalf("automigrate: %v", err)
 	}
 	prevDB := model.DB
@@ -459,6 +459,63 @@ func TestHandler_NotJsonContentType(t *testing.T) {
 			t.Errorf("want 400 got %d", w.Code)
 		}
 	})
+}
+
+func TestAuditLog_Success(t *testing.T) {
+	setupTestDB(t)
+	withDevMode(t, func() {
+		w, _ := makeRequest(t, OAuthFinalizeRequest{
+			Provider:       "google",
+			ProviderUserId: "audit-ok-1",
+			Email:          "audit-ok@example.com",
+		}, map[string]string{"User-Agent": "AuditTestUA/1.0"})
+		if w.Code != 200 {
+			t.Fatalf("setup failed: %d", w.Code)
+		}
+		var rows []RoutifyOAuthAuditLog
+		if err := model.DB.Where("provider_user_id = ?", "audit-ok-1").Find(&rows).Error; err != nil {
+			t.Fatalf("query: %v", err)
+		}
+		if len(rows) != 1 {
+			t.Fatalf("want 1 audit row, got %d", len(rows))
+		}
+		if rows[0].Outcome != AuditOutcomeOK {
+			t.Errorf("outcome: want %q got %q", AuditOutcomeOK, rows[0].Outcome)
+		}
+		if rows[0].UserId == 0 {
+			t.Error("user_id should be set on success")
+		}
+		if rows[0].UserAgent != "AuditTestUA/1.0" {
+			t.Errorf("user_agent not captured: %q", rows[0].UserAgent)
+		}
+	})
+}
+
+func TestAuditLog_AuthFailure(t *testing.T) {
+	setupTestDB(t)
+	_ = os.Unsetenv(devModeEnv)
+	prev := os.Getenv(internalSecretEnv)
+	_ = os.Unsetenv(internalSecretEnv)
+	defer func() {
+		if prev != "" {
+			_ = os.Setenv(internalSecretEnv, prev)
+		}
+	}()
+	w, _ := makeRequest(t, OAuthFinalizeRequest{
+		Provider:       "google",
+		ProviderUserId: "audit-noauth-1",
+		Email:          "ax@example.com",
+	}, nil)
+	if w.Code != 401 {
+		t.Fatalf("setup: %d", w.Code)
+	}
+	var rows []RoutifyOAuthAuditLog
+	if err := model.DB.Where("outcome = ?", AuditOutcomeAuthFailed).Find(&rows).Error; err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	if len(rows) < 1 {
+		t.Errorf("expected at least 1 auth_failed audit row, got %d", len(rows))
+	}
 }
 
 func TestHandler_DisabledUserBlocked(t *testing.T) {

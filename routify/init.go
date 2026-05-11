@@ -83,9 +83,12 @@ func Init() {
 		// Quota override stays nil until pricing/Reserver are wired (Stage C).
 		// Until then upstream billing applies.
 
-		// Migrate routify-owned side tables (oauth_accounts, etc).
+		// Migrate routify-owned side tables (oauth_accounts, audit_logs).
 		if err := migrateOAuthAccountTable(); err != nil {
 			common.SysError("[routify] failed to migrate routify_oauth_accounts: " + err.Error())
+		}
+		if err := migrateOAuthAuditLogTable(); err != nil {
+			common.SysError("[routify] failed to migrate routify_oauth_audit_logs: " + err.Error())
 		}
 
 		enabled = true

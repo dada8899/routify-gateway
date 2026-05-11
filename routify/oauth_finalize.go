@@ -74,15 +74,26 @@ var supportedProviders = map[string]bool{
 // OAuthFinalizeHandler implements POST /api/auth/oauth-finalize.
 //
 // Defensive: every error path returns JSON with "error" field so routify-web
-// can show a useful message at /login?error=... .
+// can show a useful message at /login?error=... . Every code path also writes
+// one audit row.
 func OAuthFinalizeHandler(c *gin.Context) {
+	auditRow := &RoutifyOAuthAuditLog{
+		IPAddress: c.ClientIP(),
+		UserAgent: c.GetHeader("User-Agent"),
+	}
+	defer func() { WriteAuditLog(auditRow) }()
+
 	if !checkInternalSecret(c) {
+		auditRow.Outcome = AuditOutcomeAuthFailed
+		auditRow.ErrorMessage = "internal secret invalid"
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "internal secret invalid"})
 		return
 	}
 
 	var req OAuthFinalizeRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		auditRow.Outcome = AuditOutcomeBadRequest
+		auditRow.ErrorMessage = err.Error()
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body: " + err.Error()})
 		return
 	}
@@ -90,11 +101,18 @@ func OAuthFinalizeHandler(c *gin.Context) {
 	req.ProviderUserId = strings.TrimSpace(req.ProviderUserId)
 	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
 
+	auditRow.Provider = req.Provider
+	auditRow.ProviderUserId = req.ProviderUserId
+	auditRow.Email = req.Email
+
 	if !supportedProviders[req.Provider] {
+		auditRow.Outcome = AuditOutcomeUnsupported
 		c.JSON(http.StatusBadRequest, gin.H{"error": "unsupported provider: " + req.Provider})
 		return
 	}
 	if req.ProviderUserId == "" {
+		auditRow.Outcome = AuditOutcomeBadRequest
+		auditRow.ErrorMessage = "missing provider_user_id"
 		c.JSON(http.StatusBadRequest, gin.H{"error": "provider_user_id required"})
 		return
 	}
@@ -102,9 +120,12 @@ func OAuthFinalizeHandler(c *gin.Context) {
 	user, err := findOrCreateOAuthUser(model.DB, &req)
 	if err != nil {
 		if errors.Is(err, errAccountDisabled) {
+			auditRow.Outcome = AuditOutcomeAccountBanned
 			c.JSON(http.StatusForbidden, gin.H{"error": "account disabled"})
 			return
 		}
+		auditRow.Outcome = AuditOutcomeInternalError
+		auditRow.ErrorMessage = err.Error()
 		// Log full error server-side; return generic message to caller to avoid
 		// leaking schema / SQL fragments via /login?error=... reflection.
 		common.SysError(fmt.Sprintf("[routify] oauth-finalize failed: provider=%s err=%v", req.Provider, err))
@@ -112,20 +133,26 @@ func OAuthFinalizeHandler(c *gin.Context) {
 		return
 	}
 
+	auditRow.UserId = user.Id
+
 	// Path-1 fallback: linkage existed, but admin disabled the account after.
 	if user.Status == common.UserStatusDisabled {
+		auditRow.Outcome = AuditOutcomeAccountBanned
 		c.JSON(http.StatusForbidden, gin.H{"error": "account disabled"})
 		return
 	}
 
 	token, err := ensureAccessToken(user)
 	if err != nil {
+		auditRow.Outcome = AuditOutcomeTokenIssueFail
+		auditRow.ErrorMessage = err.Error()
 		common.SysError(fmt.Sprintf("[routify] ensureAccessToken failed: user=%d err=%v", user.Id, err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "token generation failed"})
 		return
 	}
 
 	model.UpdateUserLastLoginAt(user.Id)
+	auditRow.Outcome = AuditOutcomeOK
 
 	c.JSON(http.StatusOK, OAuthFinalizeResponse{
 		Id:    user.Id,
