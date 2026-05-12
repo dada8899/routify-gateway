@@ -91,6 +91,10 @@ func Init() {
 			common.SysError("[routify] failed to migrate routify_oauth_audit_logs: " + err.Error())
 		}
 
+		// Optional ClickHouse audit sink (dual-writes from WriteAuditLog).
+		// No-op if CLICKHOUSE_URL is unset.
+		initClickHouseSink()
+
 		enabled = true
 		fmt.Println("[routify] overlay active (selector ready, quota=upstream)")
 	})

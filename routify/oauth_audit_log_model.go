@@ -89,8 +89,10 @@ const (
 // to the caller — audit logging must never block a successful (or failed)
 // login response from being delivered.
 //
-// TODO: when ClickHouse becomes available on VPS, swap this for a Sink
-// interface (DB-write fallback + ClickHouse async insert).
+// Dual-write strategy:
+//   1. The relational DB write is the durable source of truth.
+//   2. If CLICKHOUSE_URL is set, a fire-and-forget goroutine also inserts
+//      into ClickHouse for analytics — see audit_clickhouse.go.
 func WriteAuditLog(row *RoutifyOAuthAuditLog) {
 	if row == nil {
 		return
@@ -114,6 +116,11 @@ func WriteAuditLog(row *RoutifyOAuthAuditLog) {
 	row.ErrorMessage = truncate(row.ErrorMessage, 512)
 	if err := model.DB.Create(row).Error; err != nil {
 		common.SysError("[routify] audit: " + err.Error())
+	}
+	// Mirror to ClickHouse if configured. Async — never blocks the DB write
+	// path, never propagates errors back to the caller.
+	if s := chSinkRef.Load(); s != nil {
+		s.Write(row)
 	}
 }
 
